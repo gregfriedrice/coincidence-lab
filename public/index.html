@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Coincidence &amp; Probability Lab (LAN)</title>
+    <meta name="description" content="A real-time blinded Zener ESP experiment over local network with exact binomial probability analysis.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="/css/styles.css">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        darkBg: '#0b1120',
+                        cardBg: '#1e293b',
+                        surfaceBg: '#0f172a'
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-darkBg text-slate-100 min-h-screen flex flex-col items-center p-4 selection:bg-indigo-500 selection:text-white">
+
+    <!-- Header -->
+    <header class="w-full max-w-md flex justify-between items-center py-3 border-b border-slate-800 flex-shrink-0">
+        <div>
+            <h1 class="text-lg font-bold tracking-tight text-indigo-400">Coincidence Lab</h1>
+            <p class="text-xs text-slate-400">Blinded Zener ESP Experiment</p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="soundBtn" onclick="handleToggleSound()" class="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs rounded-lg border border-slate-700 transition flex items-center gap-1 active:scale-95">
+                <span id="soundIcon">🔊</span> <span id="soundStatus">On</span>
+            </button>
+            <span id="connectionBadge" class="px-2.5 py-1 text-xs rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-medium transition-colors">
+                Connecting...
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="w-full max-w-md flex-1 py-5 flex flex-col gap-5">
+
+        <!-- Screen 1: Setup & Connection (Host vs Join Tabs) -->
+        <div id="setupScreen" class="flex flex-col gap-4">
+            <!-- Segmented Mode Switcher -->
+            <div class="flex bg-cardBg p-1.5 rounded-2xl border border-slate-800 shadow-md">
+                <button type="button" id="tabHostBtn" onclick="switchSetupTab('host')"
+                    class="flex-1 py-2.5 text-xs font-bold rounded-xl border border-indigo-500 bg-indigo-600/20 text-indigo-300 transition text-center flex items-center justify-center gap-1.5 shadow">
+                    <span>🔬</span> Host New Experiment
+                </button>
+                <button type="button" id="tabJoinBtn" onclick="switchSetupTab('join')"
+                    class="flex-1 py-2.5 text-xs font-semibold rounded-xl border border-transparent text-slate-400 hover:text-slate-200 transition text-center flex items-center justify-center gap-1.5">
+                    <span>🔗</span> Join Room
+                </button>
+            </div>
+
+            <!-- Host Mode Content -->
+            <div id="hostTabContent" class="flex flex-col gap-4">
+                <!-- 1. Session Length -->
+                <div class="bg-cardBg p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">1. Session Length</h2>
+                        <span id="trialsSubtitle" class="text-xs text-indigo-400 font-medium">Standard (25)</span>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button type="button" onclick="setTrialLimit(10)" id="limitBtn10" class="trial-limit-btn py-2 text-xs font-semibold rounded-lg border border-slate-700 bg-surfaceBg/70 text-slate-300 hover:border-indigo-500 transition">10</button>
+                        <button type="button" onclick="setTrialLimit(25)" id="limitBtn25" class="trial-limit-btn py-2 text-xs font-semibold rounded-lg border border-indigo-500 bg-indigo-600/20 text-indigo-300 transition">25</button>
+                        <button type="button" onclick="setTrialLimit(50)" id="limitBtn50" class="trial-limit-btn py-2 text-xs font-semibold rounded-lg border border-slate-700 bg-surfaceBg/70 text-slate-300 hover:border-indigo-500 transition">50</button>
+                        <button type="button" onclick="setTrialLimit('unlimited')" id="limitBtnUnlimited" class="trial-limit-btn py-2 text-xs font-semibold rounded-lg border border-slate-700 bg-surfaceBg/70 text-slate-300 hover:border-indigo-500 transition">∞</button>
+                    </div>
+                    <div class="flex items-center gap-2 mt-1">
+                        <label for="customTrialInput" class="text-xs text-slate-400 whitespace-nowrap">Custom trials:</label>
+                        <input type="number" id="customTrialInput" min="1" max="500" placeholder="e.g. 100"
+                            onchange="setCustomTrialLimit(this.value)"
+                            class="w-full bg-surfaceBg border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-center focus:outline-none focus:border-indigo-500 font-mono">
+                    </div>
+                </div>
+
+                <!-- 2. Feedback Protocol -->
+                <div class="bg-cardBg p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-3">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">2. Feedback Protocol</h2>
+                        <span class="text-[11px] text-indigo-400 font-medium">Scientific Control</span>
+                    </div>
+                    <div class="flex gap-2 bg-surfaceBg/60 p-1 rounded-xl border border-slate-800">
+                        <button type="button" id="feedbackModeEndBtn" onclick="setFeedbackMode('end')"
+                            class="flex-1 py-2 text-xs font-semibold rounded-lg border border-indigo-500 bg-indigo-600/20 text-indigo-300 transition text-center">
+                            Blind Run (Scored at End)
+                        </button>
+                        <button type="button" id="feedbackModeImmBtn" onclick="setFeedbackMode('immediate')"
+                            class="flex-1 py-2 text-xs font-medium rounded-lg border border-slate-700 bg-surfaceBg/60 text-slate-400 hover:border-slate-600 transition text-center">
+                            Immediate Feedback
+                        </button>
+                    </div>
+                    <p id="feedbackModeDesc" class="text-[11px] text-slate-400 leading-relaxed">
+                        Pure Blind Run: Results are withheld and revealed only at the end to prevent counting bias.
+                    </p>
+                </div>
+
+                <!-- Create Room Action -->
+                <button onclick="createRoom()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/30 active:scale-[0.99] flex items-center justify-center gap-2">
+                    <span>Create Room &amp; Enter Lobby</span> &rarr;
+                </button>
+            </div>
+
+            <!-- Join Mode Content -->
+            <div id="joinTabContent" class="hidden flex flex-col gap-4">
+                <div class="bg-cardBg p-6 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-4">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">Join Partner's Room</h2>
+                        <p class="text-xs text-slate-400 mt-1">Enter the 4-8 character room code shared by your partner.</p>
+                    </div>
+
+                    <div class="flex flex-col gap-2">
+                        <input type="text" id="roomCodeInput" placeholder="ROOM CODE" maxlength="8"
+                            class="w-full bg-surfaceBg border border-slate-700 rounded-xl px-4 py-3 text-lg uppercase tracking-widest text-center focus:outline-none focus:border-indigo-500 font-mono font-bold text-indigo-300">
+                        <button onclick="joinRoom()" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition shadow-lg shadow-indigo-600/30 text-sm active:scale-[0.99]">
+                            Join Room
+                        </button>
+                    </div>
+
+                    <div class="p-3 bg-surfaceBg/60 rounded-xl border border-slate-800/80 text-[11px] text-slate-400 flex items-start gap-2">
+                        <span class="text-sm">💡</span>
+                        <span>Experiment length and feedback rules have already been set by the host and will be displayed in the lobby.</span>
+                    </div>
+
+                    <p id="roomError" class="hidden text-xs text-rose-400 text-center font-medium"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Screen 2: Interactive Room Lobby (Select Roles Collaboratively) -->
+        <div id="lobbyScreen" class="hidden flex flex-col gap-4">
+            <!-- Room Info & Code Box -->
+            <div class="bg-cardBg p-5 rounded-2xl border border-slate-800 shadow-xl text-center flex flex-col gap-3">
+                <div class="flex justify-between items-center text-xs text-slate-400 border-b border-slate-800 pb-2">
+                    <span>Room: <strong id="lobbyRoomDisplay" class="text-indigo-400 font-mono font-bold tracking-wider">------</strong></span>
+                    <span><strong id="lobbyTrialsDisplay">25 Trials</strong> &bull; <strong id="lobbyModeDisplay">Blind Run</strong></span>
+                </div>
+
+                <div class="flex items-center justify-center gap-2 my-1">
+                    <div id="displayRoomCode" class="text-3xl font-mono font-bold text-indigo-400 tracking-widest bg-surfaceBg px-5 py-2 rounded-xl border border-slate-800">
+                        ------
+                    </div>
+                    <button id="copyCodeBtn" onclick="copyRoomCode()" title="Copy Room Code"
+                        class="p-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl transition text-sm">
+                        📋
+                    </button>
+                </div>
+
+                <button onclick="copyInviteLink()" id="copyLinkBtn" class="text-xs text-indigo-400 hover:text-indigo-300 underline font-medium -mt-1">
+                    🔗 Copy Direct Invite Link
+                </button>
+            </div>
+
+            <!-- Partner Connection Status -->
+            <div id="partnerStatusCard" class="bg-cardBg p-4 rounded-2xl border border-slate-800 flex items-center justify-between shadow">
+                <div class="flex items-center gap-3">
+                    <div id="partnerStatusIcon" class="w-10 h-10 rounded-full bg-indigo-500/10 text-indigo-400 flex items-center justify-center text-lg animate-pulse">
+                        ⏳
+                    </div>
+                    <div>
+                        <div id="partnerStatusTitle" class="text-xs font-semibold text-slate-200">Waiting for partner...</div>
+                        <div id="partnerStatusDesc" class="text-[11px] text-slate-500">Open link on partner's phone or laptop</div>
+                    </div>
+                </div>
+                <span id="partnerStatusBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                    1/2 CONNECTED
+                </span>
+            </div>
+
+            <!-- Collaborative Role Selection Panel -->
+            <div class="bg-cardBg p-5 rounded-2xl border border-slate-800 shadow-xl flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-200 uppercase tracking-wider">Choose Your Role</h2>
+                        <p class="text-[11px] text-slate-400">Tap a role to claim it; your partner is auto-assigned the other.</p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mt-1">
+                    <!-- Sender Slot Button -->
+                    <button type="button" onclick="claimRole('sender')" id="roleSenderBtn"
+                        class="p-4 rounded-xl border border-slate-700 bg-surfaceBg/60 text-slate-300 hover:border-slate-500 transition text-center flex flex-col items-center gap-1.5 relative active:scale-98">
+                        <span id="senderSlotBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            UNCLAIMED
+                        </span>
+                        <span class="text-2xl mt-1">📡</span>
+                        <span class="font-bold text-sm">Sender</span>
+                        <span class="text-[10px] text-slate-400">Observes target</span>
+                    </button>
+
+                    <!-- Receiver Slot Button -->
+                    <button type="button" onclick="claimRole('receiver')" id="roleReceiverBtn"
+                        class="p-4 rounded-xl border border-slate-700 bg-surfaceBg/60 text-slate-300 hover:border-slate-500 transition text-center flex flex-col items-center gap-1.5 relative active:scale-98">
+                        <span id="receiverSlotBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
+                            UNCLAIMED
+                        </span>
+                        <span class="text-2xl mt-1">🎯</span>
+                        <span class="font-bold text-sm">Receiver</span>
+                        <span class="text-[10px] text-slate-400">Perceives symbol</span>
+                    </button>
+                </div>
+
+                <!-- Swap Roles Button -->
+                <button type="button" onclick="swapRoles()" id="swapRolesBtn"
+                    class="py-2 px-3 bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-xs font-semibold rounded-xl text-slate-300 flex items-center justify-center gap-1.5 transition active:scale-95">
+                    <span>⇄</span> Swap Roles
+                </button>
+            </div>
+
+            <!-- Start Experiment Button -->
+            <button type="button" onclick="startExperiment()" id="startExperimentBtn" disabled
+                class="w-full py-3.5 bg-slate-800 text-slate-500 font-bold rounded-xl transition cursor-not-allowed shadow text-sm flex items-center justify-center gap-2">
+                <span>Start Experiment</span>
+            </button>
+        </div>
+
+        <!-- Screen 3: Experiment Arena Screen -->
+        <div id="experimentScreen" class="hidden flex flex-col gap-4">
+            <!-- Status Bar -->
+            <div class="flex justify-between items-center bg-cardBg px-4 py-3 rounded-xl border border-slate-800 text-sm">
+                <div>
+                    Trial: <span id="trialCounter" class="font-bold text-indigo-400">1</span>
+                    <span class="text-slate-600"> / </span>
+                    <span id="totalTrialsDisplay" class="text-slate-400 font-semibold">25</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <div id="hitCounterBadge" class="hidden text-xs px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono">
+                        Hits: <span id="liveHits">0</span>/<span id="liveTotal">0</span>
+                    </div>
+                    <div id="modeIndicator" class="px-2 py-0.5 rounded-md text-[10px] bg-slate-800 text-slate-400 font-mono font-medium">
+                        BLIND RUN
+                    </div>
+                    <div id="roleIndicator" class="px-2.5 py-0.5 rounded-full text-xs bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 font-semibold">
+                        ROLE
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trial Progress Bar -->
+            <div class="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+                <div id="progressBar" class="bg-indigo-500 h-1.5 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+            </div>
+
+            <!-- Feedback Banner (Immediate mode only) -->
+            <div id="feedbackBanner" class="hidden text-xs py-2 px-3 rounded-xl border text-center font-semibold transition-all"></div>
+
+            <!-- Sender View -->
+            <div id="senderView" class="hidden flex flex-col gap-4">
+                <div class="bg-cardBg p-6 rounded-2xl border border-slate-800 flex flex-col items-center text-center gap-4 shadow-lg">
+                    <div>
+                        <span class="text-xs uppercase tracking-wider text-indigo-400 font-semibold">Sender Focus</span>
+                        <p class="text-xs text-slate-400 mt-0.5">Focus your thoughts intently on this symbol:</p>
+                    </div>
+                    
+                    <div id="senderTargetDisplay" class="w-32 h-32 bg-surfaceBg border border-slate-700/80 rounded-2xl flex items-center justify-center shadow-inner">
+                        <!-- SVG injected here -->
+                    </div>
+
+                    <div id="senderTargetName" class="text-sm font-bold text-slate-200">Generating Target...</div>
+                    <p id="senderStatusText" class="text-xs text-slate-500 italic">Trial active. Waiting for receiver's perception...</p>
+                </div>
+            </div>
+
+            <!-- Receiver View -->
+            <div id="receiverView" class="hidden flex flex-col gap-4">
+                <div class="bg-cardBg p-6 rounded-2xl border border-slate-800 flex flex-col items-center text-center gap-4 shadow-lg">
+                    <div>
+                        <span class="text-xs uppercase tracking-wider text-indigo-400 font-semibold">Receiver Perception</span>
+                        <p class="text-xs text-slate-400 mt-0.5">Select the Zener symbol you perceive:</p>
+                    </div>
+
+                    <div id="receiverChoicesGrid" class="grid grid-cols-3 gap-3 w-full">
+                        <!-- Dynamically populated randomized choices -->
+                    </div>
+
+                    <p id="receiverStatusText" class="text-xs text-slate-500 italic">Waiting for sender to focus on symbol...</p>
+                </div>
+            </div>
+
+            <!-- End Session Button -->
+            <button onclick="requestEndSession()" class="w-full py-3 bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 border border-rose-500/30 font-medium rounded-xl transition text-sm active:scale-[0.99]">
+                End Session &amp; View Results
+            </button>
+        </div>
+
+        <!-- Screen 4: Scientific Results Dashboard -->
+        <div id="resultsScreen" class="hidden flex flex-col gap-4">
+            <div class="bg-cardBg p-6 rounded-2xl border border-slate-800 flex flex-col items-center text-center gap-4 shadow-2xl">
+                <div>
+                    <h2 class="text-lg font-bold text-indigo-400">Scientific Results Dashboard</h2>
+                    <p class="text-xs text-slate-400">Exact Binomial Probability Analysis</p>
+                </div>
+
+                <!-- Main Metrics Cards -->
+                <div class="grid grid-cols-2 gap-3 w-full my-1">
+                    <div class="bg-surfaceBg p-3.5 rounded-xl border border-slate-800">
+                        <div class="text-3xl font-bold text-slate-100" id="resTotalTrials">0</div>
+                        <div class="text-xs text-slate-400 mt-0.5">Trials Completed</div>
+                    </div>
+                    <div class="bg-surfaceBg p-3.5 rounded-xl border border-slate-800">
+                        <div class="text-3xl font-bold text-indigo-400" id="resHits">0</div>
+                        <div class="text-xs text-slate-400 mt-0.5">Hits Observed</div>
+                    </div>
+                </div>
+
+                <!-- Statistical Summary Table -->
+                <div class="w-full bg-surfaceBg p-4 rounded-xl border border-slate-800 flex flex-col gap-2.5 text-left text-xs">
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Observed Hit Rate:</span>
+                        <span id="resHitRate" class="font-mono font-bold text-slate-100">0.0%</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Expected Chance Baseline:</span>
+                        <span class="font-mono text-slate-400">20.0% (<span id="resExpectedHits">0.0</span> hits)</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Observed Deviation:</span>
+                        <span id="resDeviation" class="font-mono font-bold text-slate-300">0.0%</span>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                        <span class="text-slate-400">Exact p-value (One-tailed):</span>
+                        <span id="resPValueOne" class="font-mono font-bold text-slate-200">—</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-slate-400">Exact p-value (Two-tailed):</span>
+                        <span id="resPValueTwo" class="font-mono font-bold text-indigo-300">—</span>
+                    </div>
+                    <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                        <span class="text-slate-400">Scientific Classification:</span>
+                        <span id="resSignificance" class="font-bold text-slate-300 text-right">—</span>
+                    </div>
+                </div>
+
+                <!-- Per-Symbol Breakdown -->
+                <div class="w-full bg-surfaceBg p-4 rounded-xl border border-slate-800 flex flex-col gap-3 text-left">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Per-Symbol Hit Breakdown</span>
+                        <span class="text-[11px] text-slate-500">Hits / Guessed</span>
+                    </div>
+                    <div id="symbolBreakdown" class="flex flex-col gap-2.5">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Full Trial-by-Trial Ledger Table -->
+                <div class="w-full bg-surfaceBg p-4 rounded-xl border border-slate-800 flex flex-col gap-3 text-left">
+                    <div class="flex justify-between items-center">
+                        <span class="text-xs font-semibold text-slate-300 uppercase tracking-wider">Trial-by-Trial Ledger</span>
+                        <span class="text-[11px] text-slate-500">Target vs Guess</span>
+                    </div>
+                    <div id="trialLogContainer">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Export & Download Results -->
+                <div class="grid grid-cols-2 gap-2.5 w-full">
+                    <button onclick="exportResults('csv')" id="downloadCsvBtn"
+                        class="py-2.5 px-3 bg-surfaceBg hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold rounded-xl transition text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow">
+                        <span>📄</span> Download CSV
+                    </button>
+                    <button onclick="exportResults('json')" id="downloadJsonBtn"
+                        class="py-2.5 px-3 bg-surfaceBg hover:bg-slate-800 border border-slate-700 text-slate-200 font-semibold rounded-xl transition text-xs flex items-center justify-center gap-1.5 active:scale-95 shadow">
+                        <span>📊</span> Download JSON
+                    </button>
+                </div>
+
+                <button onclick="location.reload()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition text-sm mt-1 active:scale-[0.99]">
+                    Start New Experiment
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full max-w-md text-center py-3 text-xs text-slate-500 border-t border-slate-800 mt-auto flex-shrink-0">
+        Coincidence Lab &bull; Classic 5-Choice Zener Protocol
+    </footer>
+
+    <!-- Partner Disconnected Overlay -->
+    <div id="disconnectOverlay" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-slate-700 rounded-2xl p-7 text-center max-w-xs w-full flex flex-col gap-4 shadow-2xl">
+            <div class="text-4xl">🔌</div>
+            <h3 class="text-lg font-bold text-slate-100">Partner Disconnected</h3>
+            <p id="disconnectMessage" class="text-xs text-slate-400">
+                Partner connection was interrupted. If they re-open the browser, this will resume automatically.
+            </p>
+            <div class="flex flex-col gap-2">
+                <button onclick="renderResultsDashboard(); document.getElementById('disconnectOverlay').classList.add('hidden');"
+                    class="w-full py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold rounded-xl transition text-xs">
+                    View Current Results
+                </button>
+                <button onclick="location.reload()"
+                    class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition text-xs">
+                    Start Fresh Session
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Room Full Overlay -->
+    <div id="roomFullOverlay" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div class="bg-cardBg border border-slate-700 rounded-2xl p-7 text-center max-w-xs w-full flex flex-col gap-4 shadow-2xl">
+            <div class="text-4xl">🚫</div>
+            <h3 class="text-lg font-bold text-slate-100">Room Full</h3>
+            <p class="text-xs text-slate-400">This room already has 2 active participants. Please enter a different room code or create a new room.</p>
+            <button onclick="document.getElementById('roomFullOverlay').classList.add('hidden'); document.getElementById('setupScreen').classList.remove('hidden');"
+                class="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition text-xs">
+                Back to Setup
+            </button>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/js/symbols.js"></script>
+    <script src="/js/audio.js"></script>
+    <script src="/js/stats.js"></script>
+    <script src="/js/app.js"></script>
+</body>
+</html>
