@@ -1,0 +1,6 @@
+{
+  "name": "Coincidence Lab",
+  "description": "A real-time blinded Zener ESP experiment over local network with exact binomial probability analysis.",
+  "requestFramePermissions": [],
+  "capabilities": []
+}
